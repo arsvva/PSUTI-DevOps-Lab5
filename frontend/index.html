@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Управление сериями событий</title>
+    <style>
+        body { font-family: sans-serif; margin: 20px; background: #f4f4f4; }
+        .container { display: flex; gap: 20px; }
+        .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); flex: 1; }
+        h2 { margin-top: 0; }
+        ul { list-style: none; padding: 0; }
+        li { padding: 10px; border-bottom: 1px solid #ddd; cursor: pointer; }
+        li:hover { background: #f0f0f0; }
+        li.active { background: #e0f7fa; font-weight: bold; }
+        button { padding: 8px 12px; margin: 5px 0; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        input, select { padding: 8px; margin: 5px 0; width: 100%; box-sizing: border-box; }
+        .event-item { display: flex; justify-content: space-between; align-items: center; }
+        .event-item button { background: #dc3545; }
+        .event-item button:hover { background: #a71d2a; }
+        .available-event { background: #d4edda; }
+    </style>
+</head>
+<body>
+    <h1>Вариант 8: Управление сериями</h1>
+    <div class="container">
+        <!-- Левая панель: Серии -->
+        <div class="panel">
+            <h2>Серии событий</h2>
+            <ul id="series-list"></ul>
+            <hr>
+            <h3>Создать новую серию</h3>
+            <input type="text" id="series-name" placeholder="Название серии">
+            <input type="text" id="series-desc" placeholder="Описание (необязательно)">
+            <button onclick="createSeries()">Создать серию</button>
+        </div>
+
+        <!-- Правая панель: События выбранной серии -->
+        <div class="panel">
+            <h2 id="selected-series-title">Выберите серию слева</h2>
+            <div id="events-in-series"></div>
+            <hr>
+            <h3>Добавить событие в серию</h3>
+            <select id="available-events-select">
+                <option value="">-- Выберите событие --</option>
+            </select>
+            <button onclick="addEventToSeries()">Добавить в серию</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1';
+        let currentSeriesId = null;
+
+        // Загрузка списка серий
+        async function loadSeries() {
+            try {
+                const response = await fetch(`${API_BASE}/series`);
+                const data = await response.json();
+                const list = document.getElementById('series-list');
+                list.innerHTML = '';
+                data.data.forEach(series => {
+                    const li = document.createElement('li');
+                    li.textContent = series.name;
+                    li.onclick = () => selectSeries(series.id);
+                    if (series.id === currentSeriesId) li.classList.add('active');
+                    list.appendChild(li);
+                });
+            } catch (e) { console.error('Ошибка загрузки серий', e); }
+        }
+
+        // Выбор серии
+        async function selectSeries(seriesId) {
+            currentSeriesId = seriesId;
+            document.getElementById('selected-series-title').textContent = `События в серии`;
+            await loadEventsInSeries();
+            await loadAvailableEvents();
+            await loadSeries(); // обновить подсветку
+        }
+
+        // Загрузка событий выбранной серии
+        async function loadEventsInSeries() {
+            if (!currentSeriesId) return;
+            try {
+                const response = await fetch(`${API_BASE}/events?series_id=${currentSeriesId}`);
+                const data = await response.json();
+                const container = document.getElementById('events-in-series');
+                container.innerHTML = '';
+                data.data.forEach(event => {
+                    const div = document.createElement('div');
+                    div.className = 'event-item';
+                    div.innerHTML = `<span>${event.title}</span><button onclick="removeEventFromSeries('${event.id}')">Удалить</button>`;
+                    container.appendChild(div);
+                });
+                if (data.data.length === 0) container.innerHTML = '<p>В серии пока нет событий.</p>';
+            } catch (e) { console.error('Ошибка загрузки событий серии', e); }
+        }
+
+        // Загрузка событий, которые можно добавить
+        async function loadAvailableEvents() {
+            try {
+                const response = await fetch(`${API_BASE}/events`);
+                const data = await response.json();
+                const select = document.getElementById('available-events-select');
+                select.innerHTML = '<option value="">-- Выберите событие --</option>';
+                data.data.forEach(event => {
+                    // Показываем только те, у которых нет серии, или все (по желанию)
+                    if (!event.series_id || event.series_id !== currentSeriesId) {
+                        const option = document.createElement('option');
+                        option.value = event.id;
+                        option.textContent = event.title;
+                        select.appendChild(option);
+                    }
+                });
+            } catch (e) { console.error('Ошибка загрузки доступных событий', e); }
+        }
+
+        // Создание серии
+        async function createSeries() {
+            const name = document.getElementById('series-name').value;
+            const desc = document.getElementById('series-desc').value;
+            if (!name) return alert('Введите название');
+            try {
+                const response = await fetch(`${API_BASE}/series`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, description: desc })
+                });
+                if (response.ok) {
+                    document.getElementById('series-name').value = '';
+                    document.getElementById('series-desc').value = '';
+                    await loadSeries();
+                } else { alert('Ошибка создания'); }
+            } catch (e) { console.error(e); }
+        }
+
+        // Добавление события в серию (обновляем событие, привязывая к серии)
+        async function addEventToSeries() {
+            const eventId = document.getElementById('available-events-select').value;
+            if (!eventId || !currentSeriesId) return alert('Выберите событие и серию');
+            try {
+                const response = await fetch(`${API_BASE}/events/${eventId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ series_id: currentSeriesId })
+                });
+                if (response.ok) {
+                    await loadEventsInSeries();
+                    await loadAvailableEvents();
+                } else { alert('Ошибка добавления'); }
+            } catch (e) { console.error(e); }
+        }
+
+        // Удаление события из серии (сбрасываем series_id в null)
+        async function removeEventFromSeries(eventId) {
+            if (!confirm('Удалить событие из серии?')) return;
+            try {
+                const response = await fetch(`${API_BASE}/events/${eventId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ series_id: null })
+                });
+                if (response.ok) {
+                    await loadEventsInSeries();
+                    await loadAvailableEvents();
+                } else { alert('Ошибка удаления'); }
+            } catch (e) { console.error(e); }
+        }
+
+        // Инициализация
+        loadSeries();
+    </script>
+</body>
+</html>
