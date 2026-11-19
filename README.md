@@ -38,6 +38,9 @@ http://localhost:8080
 docker compose down
 
 ### Структура проекта
-frontend/ - исходный код клиентской части (HTML, JS, стили)
-nginx/ - конфигурация веб-сервера (default.conf)
-compose.yml - файл конфигурации Docker Compose для управления сервисами
+* frontend/ - исходный код клиентской части (HTML, JS, стили)
+
+* nginx/ - конфигурация веб-сервера (default.conf)
+
+* compose.yml - файл конфигурации Docker Compose для управления сервисами
+
